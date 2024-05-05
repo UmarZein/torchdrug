@@ -12,6 +12,7 @@ from torchdrug import data, core, utils
 from torchdrug.core import Registry as R
 from torchdrug.utils import comm, pretty
 
+import time
 
 module = sys.modules[__name__]
 logger = logging.getLogger(__name__)
@@ -145,7 +146,10 @@ class Engine(core.Configurable):
             else:
                 model = nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
         model.train()
-
+        iters_max = num_epoch*batch_per_epoch
+        iters = 0
+        last_print_iter_progress = time.time()
+        start_time = time.time()
         for epoch in self.meter(num_epoch):
             sampler.set_epoch(epoch)
 
@@ -155,6 +159,7 @@ class Engine(core.Configurable):
             gradient_interval = min(batch_per_epoch - start_id, self.gradient_interval)
 
             for batch_id, batch in enumerate(islice(dataloader, batch_per_epoch)):
+                iters+=1
                 if self.device.type == "cuda":
                     batch = utils.cuda(batch, device=self.device)
 
@@ -178,7 +183,12 @@ class Engine(core.Configurable):
                     metrics = []
                     start_id = batch_id + 1
                     gradient_interval = min(batch_per_epoch - start_id, self.gradient_interval)
-
+                now_time=time.time()
+                speed = iters/(now_time-start_time)
+                if now_time-last_print_iter_progress>60:
+                    print(f"iters: {100*(iters/iters_max):.3f}% [{iters}/{iters_max}] @ {speed}i/s | ETA:{(iters_max-iters)/speed:.2f}s")
+                    last_print_iter_progress=now_time
+            
             if self.scheduler:
                 self.scheduler.step()
 
