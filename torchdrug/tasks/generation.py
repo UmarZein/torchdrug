@@ -112,16 +112,12 @@ class AutoregressiveGeneration(tasks.Task, core.Configurable):
         self.register_buffer("node_baseline", torch.zeros(self.max_node + 1))
         self.register_buffer("edge_baseline", torch.zeros(self.max_node + 1))
 
-    def forward(self, batch, empty_cache_period=10):
+    def forward(self, batch):
         """"""
-        assert empty_cache_period>0 and type(empty_cache_period)==int, "empty_cache_period: positive int"
         all_loss = torch.tensor(0, dtype=torch.float32, device=self.device)
         metric = {}
 
         for ref_count, (criterion, weight) in enumerate(self.criterion.items()):
-            if ref_count%empty_cache_period==0: 
-                gc.collect()
-                torch.cuda.empty_cache()
             if criterion == "nll":
                 _loss, _metric = self.density_estimation_forward(batch)
                 all_loss += _loss * weight
@@ -309,8 +305,7 @@ class AutoregressiveGeneration(tasks.Task, core.Configurable):
 
     @torch.no_grad()
     def generate(self, num_sample, max_resample=20, off_policy=False, early_stop=False, 
-                 verbose=0, empty_cache_period=10):
-        assert empty_cache_period>0 and type(empty_cache_period)==int, "empty_cache_period: positive int"
+                 verbose=0):
         num_relation = self.num_bond_type - 1
         is_training = self.training
         self.eval()
@@ -340,10 +335,6 @@ class AutoregressiveGeneration(tasks.Task, core.Configurable):
 
             start = max(0, node_in - self.max_edge_unroll)
             for ref_counter, node_out in enumerate(range(start, node_in)):
-                if ref_counter%empty_cache_period==0: 
-                    gc.collect()
-                    torch.cuda.empty_cache()
-
                 is_valid = completed.clone()
                 edge = torch.tensor([node_in, node_out], device=self.device).repeat(num_sample, 1)
                 # default: non-edge
@@ -712,16 +703,12 @@ class GCPNGeneration(tasks.Task, core.Configurable):
 
         self.register_buffer("moving_baseline", torch.zeros(self.max_node + 1))
 
-    def forward(self, batch, empty_cache_period=10):
+    def forward(self, batch):
         """"""
-        assert empty_cache_period>0 and type(empty_cache_period)==int, "empty_cache_period: positive int"
         all_loss = torch.tensor(0, dtype=torch.float32, device=self.device)
         metric = {}
 
         for ref_count, (criterion, weight) in enumerate(self.criterion.items()):
-            if ref_count%empty_cache_period==0: 
-                gc.collect()
-                torch.cuda.empty_cache()
             if criterion == "nll":
                 _loss, _metric = self.MLE_forward(batch)
                 all_loss += _loss * weight
@@ -1351,8 +1338,7 @@ class GCPNGeneration(tasks.Task, core.Configurable):
 
     @torch.no_grad()
     def generate(self, num_sample, max_resample=20, off_policy=False, max_step=30 * 2, 
-                 initial_smiles="C", verbose=0, empty_cache_period=10):
-        assert empty_cache_period>0 and type(empty_cache_period)==int, "empty_cache_period: positive int"
+                 initial_smiles="C", verbose=0):
         is_training = self.training
         self.eval()
 
@@ -1364,9 +1350,6 @@ class GCPNGeneration(tasks.Task, core.Configurable):
 
         result = []
         for i in range(max_step):
-            if i%empty_cache_period==0: 
-                gc.collect()
-                torch.cuda.empty_cache()
             new_graph = self._apply_action(graph, off_policy, max_resample, verbose=1)
             if i == max_step - 1:
                 # last step, collect all graph that is valid
